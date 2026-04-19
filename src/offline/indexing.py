@@ -158,18 +158,8 @@ def prepare_insert_data(
 
     return [chunk_ids, sources, pdf_stems, ingest_times, texts, embeddings]
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Read embeddings json from MinIO and insert into Milvus.")
-    parser.add_argument("--pdf", required=True, help="PDF name, e.g. 11.pdf")
-    parser.add_argument(
-        "--drop_old",
-        action="store_true",
-        help="Drop existing collection before recreate. Use this once when schema changes.",
-    )
-    args = parser.parse_args()
-
-    pdf_stem = parse_pdf_stem(args.pdf)
+def run_indexing(pdf: str, drop_old: bool = False):
+    pdf_stem = parse_pdf_stem(pdf)
     input_object_name = f"{OUTPUT_PREFIX}/{pdf_stem}/auto/{pdf_stem}_embeddings.json"
 
     print(f"[1/7] 读取 embedding json: s3://{BUCKET}/{input_object_name}")
@@ -184,13 +174,13 @@ def main():
     connect_milvus()
 
     print(f"[3/7] 检查 collection: {MILVUS_COLLECTION}")
-    recreate_collection_if_needed(MILVUS_COLLECTION, args.drop_old)
+    recreate_collection_if_needed(MILVUS_COLLECTION, drop_old)
 
     print(f"[4/7] 获取或创建 collection: {MILVUS_COLLECTION}")
     collection = get_or_create_collection(MILVUS_COLLECTION, vector_dim)
 
     print("[5/7] 准备插入数据")
-    data = prepare_insert_data(embeddings_json, args.pdf)
+    data = prepare_insert_data(embeddings_json, pdf)
     row_count = len(data[0])
     if row_count == 0:
         raise ValueError("No valid rows to insert.")
@@ -210,7 +200,6 @@ def main():
     print("[7/7] load collection")
     collection.load()
 
-    # 重新拿一次 collection，读取更新后的状态
     fresh_collection = Collection(MILVUS_COLLECTION)
     fresh_collection.load()
 
@@ -218,6 +207,29 @@ def main():
     print(f"collection: {MILVUS_COLLECTION}")
     print(f"num_entities: {fresh_collection.num_entities}")
     print(f"indexes: {fresh_collection.indexes}")
+
+    return {
+        "pdf_stem": pdf_stem,
+        "collection_name": MILVUS_COLLECTION,
+        "insert_count": insert_result.insert_count,
+        "num_entities": fresh_collection.num_entities,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Read embeddings json from MinIO and insert into Milvus.")
+    parser.add_argument("--pdf", required=True, help="PDF name, e.g. 11.pdf")
+    parser.add_argument(
+        "--drop_old",
+        action="store_true",
+        help="Drop existing collection before recreate. Use this once when schema changes.",
+    )
+    args = parser.parse_args()
+
+    run_indexing(
+        pdf=args.pdf,
+        drop_old=args.drop_old,
+    )
 
 
 if __name__ == "__main__":

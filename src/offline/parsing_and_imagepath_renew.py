@@ -1,3 +1,6 @@
+import os
+os.environ.setdefault("MINERU_MODEL_SOURCE", "modelscope")
+
 import tempfile
 from pathlib import Path
 from multiprocessing import freeze_support
@@ -41,20 +44,12 @@ def rewrite_relative_image_paths(
     )
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Read PDF from MinIO/S3, parse with MinerU, and upload outputs back."
-    )
-    parser.add_argument("--pdf", required=True, help="PDF file name under input prefix, e.g. 7.pdf")
-    parser.add_argument("--language", default="ch", help="Document language, e.g. ch / en")
-    parser.add_argument("--backend", default="pipeline", help="MinerU backend")
-    parser.add_argument("--parse_method", default="auto", help="MinerU parse method")
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = parse_args()
-
+def run_parsing_and_imagepath_renew(
+    pdf: str,
+    language: str = "ch",
+    backend: str = "pipeline",
+    parse_method: str = "auto",
+):
     ak = AK
     sk = SK
     endpoint = ENDPOINT
@@ -62,10 +57,7 @@ def main() -> None:
     input_prefix = INPUT_PREFIX
     output_prefix = OUTPUT_PREFIX
 
-    input_filename = args.pdf
-    language = args.language
-    backend = args.backend
-    parse_method = args.parse_method
+    input_filename = pdf
 
     reader = S3DataReader(
         default_prefix_without_bucket=input_prefix,
@@ -130,6 +122,34 @@ def main() -> None:
 
             writer.write(f"{doc_stem}/{relative_key}", payload)
             print(f"uploaded: s3://{bucket}/{output_prefix}/{doc_stem}/{relative_key}")
+
+    return {
+        "doc_stem": doc_stem,
+        "output_prefix": output_prefix,
+        "content_list_key": f"{doc_stem}/auto/{doc_stem}_content_list.json",
+        "md_key": f"{doc_stem}/auto/{doc_stem}.md",
+    }
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Read PDF from MinIO/S3, parse with MinerU, and upload outputs back."
+    )
+    parser.add_argument("--pdf", required=True, help="PDF file name under input prefix, e.g. 7.pdf")
+    parser.add_argument("--language", default="ch", help="Document language, e.g. ch / en")
+    parser.add_argument("--backend", default="pipeline", help="MinerU backend")
+    parser.add_argument("--parse_method", default="auto", help="MinerU parse method")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    run_parsing_and_imagepath_renew(
+        pdf=args.pdf,
+        language=args.language,
+        backend=args.backend,
+        parse_method=args.parse_method,
+    )
 
 
 if __name__ == "__main__":

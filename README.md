@@ -2,10 +2,12 @@
 
 ## Introduction
 · A RAG-based information retrieval system for financial research reports.  
+· It improves how large language models handle images and tables in the RAG pipeline.
 · This project demonstrates a complete pipeline from raw PDF parsing to storage and retrieval.  
 · It integrates external tools such as MinerU, Milvus, and LLMs. 
 ## Pipeline
 ![RAG Pipeline](docs/pipeline.png) 
+![image_back](docs/image_back.png) 
 ## Structure
 - src/   main source code
 

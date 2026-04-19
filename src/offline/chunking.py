@@ -206,16 +206,12 @@ def upload_json_to_minio(client: Minio, object_name: str, data: Dict[str, Any]) 
         content_type="application/json",
     )
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Chunk markdown from MinIO and save chunk json back to MinIO.")
-    parser.add_argument("--pdf", required=True, help="PDF name, e.g. 11.pdf")
-    parser.add_argument("--chunk_size", type=int, required=True, help="Chunk size")
-    parser.add_argument("--overlap", type=int, required=True, help="Chunk overlap")
-
-    args = parser.parse_args()
-
-    pdf_stem = parse_pdf_stem(args.pdf)
+def run_chunking(
+    pdf: str,
+    chunk_size: int,
+    overlap: int,
+):
+    pdf_stem = parse_pdf_stem(pdf)
 
     md_object_name = f"{OUTPUT_PREFIX}/{pdf_stem}/auto/{pdf_stem}.md"
     output_json_object_name = f"{OUTPUT_PREFIX}/{pdf_stem}/auto/{pdf_stem}_chunks.json"
@@ -228,14 +224,14 @@ def main():
     print("[2/4] 开始 chunking ...")
     chunks = markdown_to_chunks(
         md_text=md_text,
-        chunk_size=args.chunk_size,
-        overlap=args.overlap,
+        chunk_size=chunk_size,
+        overlap=overlap,
     )
 
     result = {
         "source_md": f"s3://{BUCKET}/{md_object_name}",
-        "chunk_size": args.chunk_size,
-        "overlap": args.overlap,
+        "chunk_size": chunk_size,
+        "overlap": overlap,
         "total_chunks": len(chunks),
         "chunks": chunks,
     }
@@ -246,6 +242,27 @@ def main():
     print("[4/4] 完成")
     print(f"共生成 {len(chunks)} 个 chunks")
     print(f"已上传: s3://{BUCKET}/{output_json_object_name}")
+
+    return {
+        "pdf_stem": pdf_stem,
+        "chunk_json_object_name": output_json_object_name,
+        "total_chunks": len(chunks),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Chunk markdown from MinIO and save chunk json back to MinIO.")
+    parser.add_argument("--pdf", required=True, help="PDF name, e.g. 11.pdf")
+    parser.add_argument("--chunk_size", type=int, required=True, help="Chunk size")
+    parser.add_argument("--overlap", type=int, required=True, help="Chunk overlap")
+
+    args = parser.parse_args()
+
+    run_chunking(
+        pdf=args.pdf,
+        chunk_size=args.chunk_size,
+        overlap=args.overlap,
+    )
 
 
 if __name__ == "__main__":

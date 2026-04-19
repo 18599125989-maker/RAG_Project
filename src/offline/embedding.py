@@ -85,13 +85,8 @@ def get_embedding(text: str) -> List[float]:
 
     return embedding
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Read chunk json from MinIO, generate embeddings, and upload back to MinIO.")
-    parser.add_argument("--pdf", required=True, help="PDF name, e.g. 11.pdf")
-    args = parser.parse_args()
-
-    pdf_stem = parse_pdf_stem(args.pdf)
+def run_embedding(pdf: str):
+    pdf_stem = parse_pdf_stem(pdf)
 
     input_object_name = f"{OUTPUT_PREFIX}/{pdf_stem}/auto/{pdf_stem}_chunks.json"
     output_object_name = f"{OUTPUT_PREFIX}/{pdf_stem}/auto/{pdf_stem}_embeddings.json"
@@ -135,7 +130,7 @@ def main():
 
     result = {
         "source_chunks": f"s3://{BUCKET}/{input_object_name}",
-        "pdf_name": args.pdf,
+        "pdf_name": pdf,
         "embed_model": EMBED_MODEL,
         "vector_dim": vector_dim,
         "total_chunks": len(embedded_chunks),
@@ -149,6 +144,21 @@ def main():
     print(f"共生成 {len(embedded_chunks)} 条 embedding")
     print(f"向量维度: {vector_dim}")
     print(f"已上传: s3://{BUCKET}/{output_object_name}")
+
+    return {
+        "pdf_stem": pdf_stem,
+        "embedding_json_object_name": output_object_name,
+        "total_chunks": len(embedded_chunks),
+        "vector_dim": vector_dim,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Read chunk json from MinIO, generate embeddings, and upload back to MinIO.")
+    parser.add_argument("--pdf", required=True, help="PDF name, e.g. 11.pdf")
+    args = parser.parse_args()
+
+    run_embedding(args.pdf)
 
 
 if __name__ == "__main__":

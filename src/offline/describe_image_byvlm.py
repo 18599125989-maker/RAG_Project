@@ -1,3 +1,4 @@
+
 import argparse
 import base64
 import mimetypes
@@ -133,29 +134,17 @@ def insert_description_below_absolute_image_refs(
     return "\n".join(new_lines) + ("\n" if md_text.endswith("\n") else "")
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Download md/images from MinIO, describe images with SiliconFlow VLM, and update md."
-    )
-    parser.add_argument("--pdf", required=True, help="PDF filename, e.g. 7.pdf")
-    parser.add_argument("--auto_dir", default="auto", help="MinerU subdir, usually auto")
-    parser.add_argument(
-        "--prompt",
-        default=(
-            "请用中文描述这张图片。"
-            "如果是图表，请说明图表类型、横纵轴、主要趋势和关键结论；"
-            "如果是表格，请概括字段和主要内容；"
-            "如果是流程图或结构图，请说明模块、关系与核心含义；"
-            "输出为一段简洁但信息充分的话。"
-        ),
-        help="Prompt for VLM",
-    )
-    return parser.parse_args()
-
-
-def main():
-    args = parse_args()
-
+def run_describe_image_byvlm(
+    pdf: str,
+    auto_dir: str = "auto",
+    prompt: str = (
+        "请用中文描述这张图片。"
+        "如果是图表，请说明图表类型、横纵轴、主要趋势和关键结论；"
+        "如果是表格，请概括字段和主要内容；"
+        "如果是流程图或结构图，请说明模块、关系与核心含义；"
+        "输出为一段简洁但信息充分的话。"
+    ),
+):
     client = OpenAI(
         api_key=SILICONFLOW_API_KEY,
         base_url="https://api.siliconflow.cn/v1",
@@ -178,9 +167,9 @@ def main():
         addressing_style="path",
     )
 
-    pdf_stem = Path(args.pdf).stem
-    md_key = f"{pdf_stem}/{args.auto_dir}/{pdf_stem}.md"
-    images_dir_key = f"{pdf_stem}/{args.auto_dir}/images"
+    pdf_stem = Path(pdf).stem
+    md_key = f"{pdf_stem}/{auto_dir}/{pdf_stem}.md"
+    images_dir_key = f"{pdf_stem}/{auto_dir}/images"
 
     with tempfile.TemporaryDirectory(prefix="vlm_md_enrich_") as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
@@ -197,7 +186,11 @@ def main():
         image_urls = extract_absolute_image_refs_from_md(md_text)
         if not image_urls:
             print("没有在 md 中找到绝对路径图片引用，程序结束。")
-            return
+            return {
+                "pdf_stem": pdf_stem,
+                "md_key": md_key,
+                "image_count": 0,
+            }
 
         image_url_to_name = build_image_url_to_name(image_urls)
         image_names = list(image_url_to_name.values())
@@ -220,7 +213,7 @@ def main():
                 client=client,
                 model=VLM_MODEL,
                 image_path=local_image_path,
-                prompt=args.prompt,
+                prompt=prompt,
             )
             image_name_to_desc[image_name] = desc
             print(f"  已完成描述: {image_name}")
@@ -232,6 +225,40 @@ def main():
         print(f"  已覆盖 md: s3://{BUCKET}/{OUTPUT_PREFIX}/{md_key}")
 
         print("全部完成。")
+        return {
+            "pdf_stem": pdf_stem,
+            "md_key": md_key,
+            "image_count": len(image_name_to_desc),
+        }
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Download md/images from MinIO, describe images with SiliconFlow VLM, and update md."
+    )
+    parser.add_argument("--pdf", required=True, help="PDF filename, e.g. 7.pdf")
+    parser.add_argument("--auto_dir", default="auto", help="MinerU subdir, usually auto")
+    parser.add_argument(
+        "--prompt",
+        default=(
+            "请用中文描述这张图片。"
+            "如果是图表，请说明图表类型、横纵轴、主要趋势和关键结论；"
+            "如果是表格，请概括字段和主要内容；"
+            "如果是流程图或结构图，请说明模块、关系与核心含义；"
+            "输出为一段简洁但信息充分的话。"
+        ),
+        help="Prompt for VLM",
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    run_describe_image_byvlm(
+        pdf=args.pdf,
+        auto_dir=args.auto_dir,
+        prompt=args.prompt,
+    )
 
 
 if __name__ == "__main__":
